@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any, List
 
 import streamlit as st
-from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
@@ -11,13 +10,39 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent
 PDF_DIR = BASE_DIR
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "groq").strip().lower()
-LLM_MODEL = os.environ.get("LLM_MODEL", "llama-3.1-8b-instant")
+EMBEDDING_MODEL_DEFAULT = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def load_streamlit_secrets() -> None:
+    if hasattr(st, "secrets") and isinstance(st.secrets, dict):
+        for key in [
+            "GROQ_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "LANGCHAIN_API_KEY",
+            "LANGCHAIN_TRACING_V2",
+            "LANGCHAIN_PROJECT",
+            "LLM_PROVIDER",
+            "LLM_MODEL",
+            "EMBEDDING_MODEL",
+        ]:
+            value = st.secrets.get(key)
+            if value:
+                os.environ.setdefault(key, value)
+
+
+def get_llm_provider() -> str:
+    return os.environ.get("LLM_PROVIDER", "groq").strip().lower()
+
+
+def get_llm_model() -> str:
+    return os.environ.get("LLM_MODEL", "llama-3.1-8b-instant")
+
+
+def get_embedding_model() -> str:
+    return os.environ.get("EMBEDDING_MODEL", EMBEDDING_MODEL_DEFAULT)
 
 REFUSAL_MESSAGE = (
     "I'm sorry, but I can only answer questions related to the company's HR policies "
@@ -49,7 +74,7 @@ def build_embeddings():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return SentenceTransformerEmbeddings(
-        model_name=EMBEDDING_MODEL,
+        model_name=get_embedding_model(),
         model_kwargs={"device": device},
     )
 
@@ -71,7 +96,9 @@ def build_retriever(documents: List[Any]):
 
 
 def initialize_llm():
-    provider = LLM_PROVIDER
+    load_streamlit_secrets()
+    provider = get_llm_provider()
+    model_name = get_llm_model()
 
     if provider == "groq":
         from langchain_groq import ChatGroq
@@ -82,7 +109,7 @@ def initialize_llm():
         os.environ["GROQ_API_KEY"] = api_key
 
         return ChatGroq(
-            model=LLM_MODEL,
+            model=model_name,
             temperature=0.1,
             max_tokens=512,
         )
@@ -96,7 +123,7 @@ def initialize_llm():
         os.environ["OPENAI_API_KEY"] = api_key
 
         return ChatOpenAI(
-            model=LLM_MODEL,
+            model=model_name,
             temperature=0.1,
             max_tokens=512,
         )
@@ -110,7 +137,7 @@ def initialize_llm():
         os.environ["GOOGLE_API_KEY"] = api_key
 
         return ChatGoogleGenerativeAI(
-            model=LLM_MODEL,
+            model=model_name,
             temperature=0.1,
             max_output_tokens=512,
         )
@@ -215,9 +242,9 @@ Question:
         "ask": ask,
         "document_count": len(documents),
         "pdf_dir": str(pdf_dir),
-        "model": LLM_MODEL,
-        "provider": LLM_PROVIDER,
-        "embedding_model": EMBEDDING_MODEL,
+        "model": get_llm_model(),
+        "provider": get_llm_provider(),
+        "embedding_model": get_embedding_model(),
     }
 
 
