@@ -3,12 +3,9 @@ from pathlib import Path
 from typing import Any, List
 
 import streamlit as st
-from langchain_community.document_loaders import PyPDFDirectoryLoader
-from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 BASE_DIR = Path(__file__).resolve().parent
 PDF_DIR = BASE_DIR
@@ -61,6 +58,14 @@ def find_pdf_directory() -> Path:
 
 
 def load_documents(pdf_dir: Path):
+    try:
+        from langchain_community.document_loaders import PyPDFDirectoryLoader
+    except ImportError as error:
+        raise ImportError(
+            "Unable to import PyPDFDirectoryLoader from langchain_community.document_loaders. "
+            "Please install langchain-community in requirements.txt: langchain-community==0.4.2"
+        ) from error
+
     loader = PyPDFDirectoryLoader(str(pdf_dir))
     documents = loader.load()
     if not documents:
@@ -70,7 +75,13 @@ def load_documents(pdf_dir: Path):
 
 def build_embeddings():
     import torch
-    from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+    try:
+        from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+    except ImportError as error:
+        raise ImportError(
+            "Unable to import SentenceTransformerEmbeddings from langchain_community.embeddings. "
+            "Please install langchain-community and sentence-transformers in requirements.txt."
+        ) from error
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return SentenceTransformerEmbeddings(
@@ -80,6 +91,22 @@ def build_embeddings():
 
 
 def build_retriever(documents: List[Any]):
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    except ImportError as error:
+        raise ImportError(
+            "Unable to import RecursiveCharacterTextSplitter from langchain_text_splitters. "
+            "Please add langchain-text-splitters to requirements.txt if missing."
+        ) from error
+
+    try:
+        from langchain_community.vectorstores import FAISS
+    except ImportError as error:
+        raise ImportError(
+            "Unable to import FAISS from langchain_community.vectorstores. "
+            "Please install langchain-community in requirements.txt: langchain-community==0.4.2"
+        ) from error
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=768,
         chunk_overlap=128,
